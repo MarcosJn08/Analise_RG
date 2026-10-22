@@ -1,244 +1,131 @@
 
+import os
+import re
 import cv2
 import pytesseract
-import os
 import pandas as pd
 
-
 # configuração
-
 projeto = os.path.dirname(os.path.abspath(__file__))
 pasta_dataset = os.path.join(projeto, "DataSet")
 csv_saida = os.path.join(projeto, "features.csv")
 
-categorias = {
-    "RG_antigo": "rg_antigo",
-    "RG_novo": "rg_novo",
-    "Invalido_antigo": "invalido_antigo",
-    "Invalido_novo": "invalido_novo",
+pastas_categorias = {
+    "RG_antigo": ["RG_antigo"],
+    "RG_novo": ["RG_novo"],
+    "Invalido": ["Invalido", "Invalido_antigo", "Invalido_novo"]
 }
 
+extensoes = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
-# carregar imagens
+# carregar detector de rosto
+cascade_path = os.path.join(
+    cv2.data.haarcascades,
+    "haarcascade_frontalface_default.xml"
+)
+face_cascade = cv2.CascadeClassifier(cascade_path)
 
-def carregar_imagens(pasta_imagens):
-    """Retorna os caminhos das imagens válidas."""
+if face_cascade.empty():
+    raise RuntimeError("Não foi possível carregar o detector de rostos.")
 
-    caminhos = []
+# identificar nacionalidade
 
-    if not os.path.isdir(pasta_imagens):
-        print(f"Pasta não encontrada: {pasta_imagens}")
-        return caminhos
-
-    for arquivo in sorted(os.listdir(pasta_imagens)):
-        caminho = os.path.join(pasta_imagens, arquivo)
-
-        if not os.path.isfile(caminho):
-            continue
-
-        imagem = cv2.imread(caminho)
-
-        if imagem is not None:
-            print(f"Lendo imagem: {arquivo}")
-            caminhos.append(caminho)
-        else:
-            print(f"Arquivo inválido, ignorado: {arquivo}")
-
-    return caminhos
+# verificar palavra nacionalidade
+def identificar_nacionalidade(texto):
+    if re.search(r"\bnacionalidade\b", texto, re.IGNORECASE):
+        return True
+    return False
 
 
-# detectar rosto
+# extrair características da imagem
+def extrair_caracteristicas(caminho, categoria):
+    imagem = cv2.imread(caminho)
 
-def detectar_rosto(img, face_cascade):
-    """Detecta o primeiro rosto e retorna suas coordenadas."""
+    if imagem is None:
+        print(f"Não foi possível abrir: {os.path.basename(caminho)}")
+        return None
 
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    altura, largura = imagem.shape[:2]
+    cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
 
     faces = face_cascade.detectMultiScale(
-        img_gray,
+        cinza,
         scaleFactor=1.1,
-        minNeighbors=5
+        minNeighbors=5,
+        minSize=(30, 30)
     )
 
     if len(faces) > 0:
-        x, y, w, h = faces[0]
-        return x, y, w, h
+        x_face, y_face, w_face, h_face = max(
+            faces,
+            key=lambda face: face[2] * face[3]
+        )
+        rosto_detectado = True
+    else:
+        x_face = y_face = w_face = h_face = 0
+        rosto_detectado = False
 
-    return None, None, None, None
-
-
-# extrair texto com ocr
-
-def extrair_texto(img):
-    """Extrai texto da imagem usando o Tesseract."""
-
-    return pytesseract.image_to_string(
-        img,
+    texto = pytesseract.image_to_string(
+        cinza,
         lang="por"
     )
 
-
-# contar palavras
-
-def contar_palavras(texto):
-    """Conta a quantidade de palavras extraídas."""
-
-    return len(texto.split())
-
-
-# bag of words
-
-def obter_bag_palavras():
-    """Retorna as palavras de interesse."""
-
-    return [
-        "república",
-        "federativa",
-        "brasil",
-        "estado",
-        "secretaria",
-        "segurança",
-        "pública",
-        "identificação",
-        "instituto",
-        "carteira",
-        "identidade",
-        "registro",
-        "geral",
-        "nome",
-        "filiação",
-        "nascimento",
-        "nacionalidade",
-        "naturalidade",
-        "validade",
-        "cpf",
-        "documento",
-        "ssp",
-        "brasileira",
-        "nacional",
-        "emissão",
-        "sexo",
-        "lei",
-    ]
-
-
-def gerar_features_bag_palavras(df, bag_palavras):
-    """Cria uma coluna para a frequência de cada palavra."""
-
-    textos = (
-        df["texto_extraido"]
-        .fillna("")
-        .str.lower()
-        .str.split()
+    quantidade_letras = sum(
+        1 for caractere in texto if caractere.isalpha()
     )
 
-    for palavra in bag_palavras:
-        df[palavra] = textos.apply(
-            lambda palavras: palavras.count(palavra.lower())
-        )
-
-    return df
-
-
-# processar imagem
-
-def processar_imagem(caminho, face_cascade, categoria):
-    """Extrai as características básicas de uma imagem."""
-
-    img = cv2.imread(caminho)
-
-    if img is None:
-        print(f"Não foi possível abrir: {caminho}")
-        return None
-
-    altura, largura = img.shape[:2]
-
-    x, y, w, h = detectar_rosto(img, face_cascade)
-    texto = extrair_texto(img)
+    nacionalidade = identificar_nacionalidade(texto)
 
     return {
         "nome_arquivo": os.path.basename(caminho),
-        "caminho_imagem": os.path.relpath(
-            caminho, projeto
-        ),
         "categoria": categoria,
         "largura_imagem": largura,
         "altura_imagem": altura,
-        "x_face": x,
-        "y_face": y,
-        "w_face": w,
-        "h_face": h,
-        "rosto_detectado": x is not None,
-        "texto_extraido": texto.strip(),
-        "quantidade_palavras": contar_palavras(texto),
+        "x_face": int(x_face),
+        "y_face": int(y_face),
+        "w_face": int(w_face),
+        "h_face": int(h_face),
+        "rosto_detectado": rosto_detectado,
+        "nacionalidade": nacionalidade,
+        "quantidade_letras": quantidade_letras
     }
 
-
-# executar programa
-
+# processar imagens
 def main():
-    cascade_path = (
-        cv2.data.haarcascades
-        + "haarcascade_frontalface_default.xml"
-    )
-
-    face_cascade = cv2.CascadeClassifier(cascade_path)
-
-    if face_cascade.empty():
-        raise RuntimeError(
-            "Não foi possível carregar o detector de rostos."
-        )
-
     resultados = []
-    bag_palavras = obter_bag_palavras()
 
-    for pasta, categoria in categorias.items():
-        pasta_imagens = os.path.join(
-            pasta_dataset, pasta
-        )
+    for categoria, nomes_pastas in pastas_categorias.items():
+        for nome_pasta in nomes_pastas:
+            pasta = os.path.join(pasta_dataset, nome_pasta)
 
-        print(f"\nProcessando categoria: {categoria}")
+            if not os.path.isdir(pasta):
+                continue
 
-        caminhos = carregar_imagens(pasta_imagens)
+            for nome_arquivo in os.listdir(pasta):
+                if not nome_arquivo.lower().endswith(extensoes):
+                    continue
 
-        for caminho in caminhos:
-            try:
-                resultado = processar_imagem(
-                    caminho,
-                    face_cascade,
-                    categoria
-                )
+                caminho = os.path.join(pasta, nome_arquivo)
 
-                if resultado is not None:
-                    resultados.append(resultado)
+                dados = extrair_caracteristicas(caminho, categoria)
 
-            except Exception as erro:
-                print(f"Erro ao processar {caminho}: {erro}")
+                if dados is not None:
+                    resultados.append(dados)
+
+            print(f"Categoria processada: {nome_pasta}")
 
     if not resultados:
-        print("Nenhuma imagem foi processada.")
+        print("Nenhuma imagem foi processada. Verifique as pastas do DataSet.")
         return
 
     df = pd.DataFrame(resultados)
+    df.to_csv(csv_saida, index=False, encoding="utf-8-sig")
 
-    df = gerar_features_bag_palavras(
-        df,
-        bag_palavras
-    )
-
-    df.to_csv(
-        csv_saida,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    print("\nExtração concluída!")
-    print(f"Imagens processadas: {len(df)}")
-    print(f"Arquivo CSV: {csv_saida}")
-
-    print("\nQuantidade por categoria:")
+    print("\nResumo das categorias:")
     print(df["categoria"].value_counts())
 
+    print(f"\nTotal de imagens: {len(df)}")
+    print(f"Arquivo salvo em: {csv_saida}")
 
 if __name__ == "__main__":
     main()
