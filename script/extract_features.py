@@ -1,131 +1,119 @@
-
-import os
-import re
 import cv2
 import pytesseract
+import os
 import pandas as pd
+import regex as re
 
-# configuração
-projeto = os.path.dirname(os.path.abspath(__file__))
-pasta_dataset = os.path.join(projeto, "DataSet")
-csv_saida = os.path.join(projeto, "features.csv")
+def carregar_imagens(DataSet_Filtrado):
+    caminhos = []
+    for arquivo in os.listdir(DataSet_Filtrado):
+        print(f"Lendo imagem {arquivo}")
+        caminho = os.path.join(DataSet_Filtrado, arquivo)
+        if cv2.imread(caminho) is not None:
+            caminhos.append(caminho)
+        else:
+            print(f"Arquivo {arquivo} não é uma imagem válida, pulando")
+    return caminhos
 
-pastas_categorias = {
-    "RG_antigo": ["RG_antigo"],
-    "RG_novo": ["RG_novo"],
-    "Invalido": ["Invalido", "Invalido_antigo", "Invalido_novo"]
-}
-
-extensoes = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
-
-# carregar detector de rosto
-cascade_path = os.path.join(
-    cv2.data.haarcascades,
-    "haarcascade_frontalface_default.xml"
-)
-face_cascade = cv2.CascadeClassifier(cascade_path)
-
-if face_cascade.empty():
-    raise RuntimeError("Não foi possível carregar o detector de rostos.")
-
-# identificar nacionalidade
-
-# verificar palavra nacionalidade
-def identificar_nacionalidade(texto):
-    if re.search(r"\bnacionalidade\b", texto, re.IGNORECASE):
-        return True
-    return False
-
-
-# extrair características da imagem
-def extrair_caracteristicas(caminho, categoria):
-    imagem = cv2.imread(caminho)
-
-    if imagem is None:
-        print(f"Não foi possível abrir: {os.path.basename(caminho)}")
-        return None
-
-    altura, largura = imagem.shape[:2]
-    cinza = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
-
-    faces = face_cascade.detectMultiScale(
-        cinza,
-        scaleFactor=1.1,
-        minNeighbors=5,
-        minSize=(30, 30)
-    )
-
+def detectar_rosto(img, face_cascade):
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(img_gray, scaleFactor=1.1, minNeighbors=5)
     if len(faces) > 0:
-        x_face, y_face, w_face, h_face = max(
-            faces,
-            key=lambda face: face[2] * face[3]
-        )
-        rosto_detectado = True
+        x, y, w, h = faces[0]
+        return x, y, w, h
+    return None, None, None, None
+
+def detectar_qrcode(img):  
+    detector = cv2.QRCodeDetector()
+
+    data, bbox, _ = detector.detectAndDecode(img) 
+
+    if dados:
+        return 1
     else:
-        x_face = y_face = w_face = h_face = 0
-        rosto_detectado = False
+        return 0 
 
-    texto = pytesseract.image_to_string(
-        cinza,
-        lang="por"
-    )
 
-    quantidade_letras = sum(
-        1 for caractere in texto if caractere.isalpha()
-    )
+def extrair_texto(img):
+    """Extrai texto da imagem usando OCR."""
+    return pytesseract.image_to_string(img)
 
-    nacionalidade = identificar_nacionalidade(texto)
 
+def contar_palavras(texto):
+    """Conta o número de palavras em um texto."""
+    return len(texto.split())
+
+def processar_imagem(caminho, face_cascade):
+    img = cv2.imread(caminho)
+    x, y, w, h = detectar_rosto(img, face_cascade)
+    texto = extrair_texto(img)
+    quantidade_palavras = contar_palavras(texto)
+    
     return {
         "nome_arquivo": os.path.basename(caminho),
-        "categoria": categoria,
-        "largura_imagem": largura,
-        "altura_imagem": altura,
-        "x_face": int(x_face),
-        "y_face": int(y_face),
-        "w_face": int(w_face),
-        "h_face": int(h_face),
-        "rosto_detectado": rosto_detectado,
-        "nacionalidade": nacionalidade,
-        "quantidade_letras": quantidade_letras
+        "x_face": x,
+        "y_face": y,
+        "w_face": w,
+        "h_face": h,
+        "texto_extraido": texto.strip(),
+        "quantidade_palavras": quantidade_palavras
     }
 
-# processar imagens
+def obter_bag_palavras():
+    return [
+        "Identidade",i´
+        "nome",
+        "cpf",
+        "Registro Geral"
+        "cpf",
+        "Sexo",
+        "Nacionalidade",
+        "DOC. ORIGEM",
+        "name",
+        "date of birth",
+        "Place of birth",
+        "Nationality",
+        "Sex",
+    ]
+
+
+def gerar_features_bag_palavras(df, bag_palavras):
+    """Cria colunas de frequência para cada palavra do bag de palavras."""
+    for palavra in bag_palavras:
+        df[palavra] = df["texto_extraido"].apply(
+            lambda texto: texto.lower().split().count(palavra.lower())
+        )
+    return df
+
+
+def gerar_csv(resultados, nome_arquivo):
+    """Gera um arquivo CSV com os resultados."""
+    df = pd.DataFrame(resultados)
+    df.to_csv(nome_arquivo, index=False, encoding="utf-8")
+    print(f"CSV gerado: {nome_arquivo}")
+
+
 def main():
+    DataSet_Filtrado = "DataSet_Filtrado"
+    csv_saida = "features.csv"
+    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+
+    caminhos_imagens = carregar_imagens(pasta_imagens)
     resultados = []
 
-    for categoria, nomes_pastas in pastas_categorias.items():
-        for nome_pasta in nomes_pastas:
-            pasta = os.path.join(pasta_dataset, nome_pasta)
-
-            if not os.path.isdir(pasta):
-                continue
-
-            for nome_arquivo in os.listdir(pasta):
-                if not nome_arquivo.lower().endswith(extensoes):
-                    continue
-
-                caminho = os.path.join(pasta, nome_arquivo)
-
-                dados = extrair_caracteristicas(caminho, categoria)
-
-                if dados is not None:
-                    resultados.append(dados)
-
-            print(f"Categoria processada: {nome_pasta}")
-
-    if not resultados:
-        print("Nenhuma imagem foi processada. Verifique as pastas do DataSet.")
-        return
+    for caminho in caminhos_imagens:
+        resultado = processar_imagem(caminho, face_cascade)
+        resultados.append(resultado)
 
     df = pd.DataFrame(resultados)
-    df.to_csv(csv_saida, index=False, encoding="utf-8-sig")
+    df["qrcode_detectado"] = df["nome_arquivo"].apply(lambda x: detectar_qrcode(cv2.imread(x)))
+    bag_palavras = obter_bag_palavras()
+    df = gerar_features_bag_palavras(df, bag_palavras)
 
-    print("\nResumo das categorias:")
-    print(df["categoria"].value_counts())
+    df.to_csv(csv_saida, index=False, encoding="utf-8")
+    print(f"CSV gerado com features: {csv_saida}")
 
-    print(f"\nTotal de imagens: {len(df)}")
-    print(f"Arquivo salvo em: {csv_saida}")
 
 if __name__ == "__main__":
     main()
