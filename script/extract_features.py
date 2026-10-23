@@ -73,7 +73,7 @@ def obter_bag_palavras():
         "date of birth",
         "Place of birth",
         "Nationality",
-        "Sex",
+        "Sex"
     ]
 
 
