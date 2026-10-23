@@ -35,12 +35,10 @@ def detectar_qrcode(img):
 
 
 def extrair_texto(img):
-    """Extrai texto da imagem usando OCR."""
     return pytesseract.image_to_string(img)
 
 
 def contar_palavras(texto):
-    """Conta o número de palavras em um texto."""
     return len(texto.split())
 
 def processar_imagem(caminho, face_cascade):
@@ -61,7 +59,7 @@ def processar_imagem(caminho, face_cascade):
 
 def obter_bag_palavras():
     return [
-        "Identidade",i´
+        "Identidade",
         "nome",
         "cpf",
         "Registro Geral"
@@ -87,7 +85,6 @@ def gerar_features_bag_palavras(df, bag_palavras):
 
 
 def gerar_csv(resultados, nome_arquivo):
-    """Gera um arquivo CSV com os resultados."""
     df = pd.DataFrame(resultados)
     df.to_csv(nome_arquivo, index=False, encoding="utf-8")
     print(f"CSV gerado: {nome_arquivo}")
