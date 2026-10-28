@@ -1,18 +1,19 @@
 
 from pathlib import Path
 
-PROJETO = Path(__file__).resolve().parent.parent
-DATASET = PROJETO / "DataSet"
+DATASET = Path(
+    "/home/marcos/Área de trabalho/Projetos/Analise_RG/Dataset/Dataset_Filtrado"
+)
 
 CATEGORIAS = {
+    "Invalidos": "Invalidos",
     "RG_antigo": "RG_antigo",
+    "rg_antigo_invalido": "RG_antigo_invalido",
     "RG_novo": "RG_novo",
-    "Invalido_antigo": "Invalido_antigo",
-    "Invalido_novo": "Invalido_novo",
+    "rg_novo_invalido": "RG_novo_invalido",
 }
 
 EXTENSOES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-
 
 def renomear_pasta(nome_pasta, prefixo):
     pasta = DATASET / nome_pasta
@@ -28,20 +29,21 @@ def renomear_pasta(nome_pasta, prefixo):
             if arquivo.is_file()
             and arquivo.suffix.lower() in EXTENSOES
         ),
-        key=lambda arquivo: arquivo.name.lower(),
+        key=lambda arquivo: arquivo.name.lower()
     )
 
     if not arquivos:
-        print(f"[AVISO] Nenhuma imagem em {nome_pasta}")
+        print(f"[AVISO] Nenhuma imagem encontrada em {nome_pasta}")
         return
 
-    # Primeiro, usa nomes temporários para evitar conflitos.
+    print(f"\nProcessando pasta: {nome_pasta}")
+
+    # Primeira etapa: nomes temporários para evitar conflitos.
     temporarios = []
 
     for i, arquivo in enumerate(arquivos, start=1):
         temporario = pasta / (
-            f"__temporario_renomeacao_{i:05d}"
-            f"{arquivo.suffix.lower()}"
+            f"__temp_renomeacao_{i:05d}{arquivo.suffix.lower()}"
         )
 
         if temporario.exists():
@@ -52,15 +54,15 @@ def renomear_pasta(nome_pasta, prefixo):
         arquivo.rename(temporario)
         temporarios.append(temporario)
 
-    # Depois, aplica os nomes definitivos.
+    # Segunda etapa: nomes definitivos.
     for i, temporario in enumerate(temporarios, start=1):
-        novo_nome = f"{prefixo}_{i:03d}{temporario.suffix}"
+        novo_nome = f"{prefixo}_{i:03d}{temporario.suffix.lower()}"
         destino = pasta / novo_nome
 
         temporario.rename(destino)
-        print(f"{nome_pasta}: {novo_nome}")
+        print(f"[OK] {temporario.name} -> {novo_nome}")
 
-    print(f"[OK] {nome_pasta}: {len(arquivos)} imagem(ns)\n")
+    print(f"[FINALIZADO] {len(arquivos)} imagem(ns) renomeada(s).")
 
 
 def main():
@@ -69,13 +71,13 @@ def main():
             f"Diretório DataSet não encontrado: {DATASET}"
         )
 
-    print(f"Projeto: {PROJETO}")
-    print(f"Dataset: {DATASET}\n")
+    print("Pasta encontrada:", DATASET.is_dir())
+    print("Caminho:", DATASET)
 
     for nome_pasta, prefixo in CATEGORIAS.items():
         renomear_pasta(nome_pasta, prefixo)
 
-    print("Processo de renomeação finalizado.")
+    print("\nProcesso de renomeação finalizado.")
 
 
 if __name__ == "__main__":
