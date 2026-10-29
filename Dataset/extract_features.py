@@ -9,7 +9,7 @@ import regex as re
 
 PROJETO = Path(__file__).resolve().parent
 PASTA_IMAGENS = PROJETO / "Dataset_Filtrado"
-CSV_SAIDA = PROJETO / "features.csv"
+CSV_SAIDA = PROJETO / "features_3.csv"
 
 CASCADE_PATH = (
     cv2.data.haarcascades
@@ -89,15 +89,31 @@ def contar_palavras(texto):
 def obter_bag_palavras():
     return [
         "Identidade",
-        "nome",
-        "cpf",
+        "Carteira de Identidade",
         "Registro Geral",
-        "Sexo",
+        "CPF",
+        "Nome",
+        "Filiação",
+        "Data de Nascimento",
+        "Naturalidade",
         "Nacionalidade",
-        "DOC. ORIGEM",
-        "name",
-        "date of birth",
-        "Place of birth",
+        "Sexo",
+        "Órgão Expedidor",
+        "Data de Expedição",
+        "SSP",
+        "Polegar Direito",
+        "Assinatura do Titular",
+        "Válida em todo território nacional",
+        "Carteira de Identidade Nacional",
+        "Identidade Nacional",
+        "QR Code",
+        "Validade",
+        "República Federativa do Brasil",
+        "National Identity Card",
+        "Identity Card",
+        "Name",
+        "Date of Birth",
+        "Place of Birth",
         "Nationality",
         "Sex"
     ]
