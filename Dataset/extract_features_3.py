@@ -9,8 +9,8 @@ from pytesseract import Output
 
 
 PROJETO = Path(__file__).resolve().parent
-PASTA_IMAGENS = PROJETO / "DataSet(Kaio)"
-CSV_SAIDA = PROJETO / "features_5.csv"
+PASTA_IMAGENS = PROJETO / "Dataset_Filtrado02"
+CSV_SAIDA = PROJETO / "Feature" / "features_6.csv"
 
 CASCADE_PATH = (
     cv2.data.haarcascades
@@ -19,10 +19,6 @@ CASCADE_PATH = (
 
 EXTENSOES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
-
-# ---------------------------------------------------------------------
-# Carregamento
-# ---------------------------------------------------------------------
 def carregar_imagens(pasta_imagens):
     if not pasta_imagens.is_dir():
         raise FileNotFoundError(
