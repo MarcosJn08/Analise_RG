@@ -9,8 +9,8 @@ from pytesseract import Output
 
 
 PROJETO = Path(__file__).resolve().parent
-PASTA_IMAGENS = PROJETO / "Dataset_Filtrado02"
-CSV_SAIDA = PROJETO / "Feature" / "features_7.csv"
+PASTA_IMAGENS = PROJETO / "MeusDocumentos"
+CSV_SAIDA = PROJETO / "Feature" / "MeusDocumentos.csv"
 
 CASCADE_PATH = (
     cv2.data.haarcascades
@@ -47,10 +47,6 @@ def carregar_imagens(pasta_imagens):
 
     return caminhos
 
-
-# ---------------------------------------------------------------------
-# Correção de orientação (0/90/180/270) e inclinação (ângulos pequenos)
-# ---------------------------------------------------------------------
 def _redimensionar(img, largura_max=1000):
     h, w = img.shape[:2]
 
@@ -73,8 +69,6 @@ def _rotacionar_90(img, graus):
 
 
 def _pontuar_ocr(img):
-    """Pontuação = soma da confiança das palavras reconhecidas.
-    Imagem de cabeça pra baixo/de lado gera pouco texto legível."""
     dados = pytesseract.image_to_data(
         img,
         lang="por+eng",
