@@ -8,8 +8,8 @@ import regex as re
 
 
 PROJETO = Path(__file__).resolve().parent
-PASTA_IMAGENS = PROJETO / "Dataset_Filtrado"
-CSV_SAIDA = PROJETO / "features_3.csv"
+PASTA_IMAGENS = PROJETO / "DataSet(Kaio)"
+CSV_SAIDA = PROJETO / "features_4.csv"
 
 CASCADE_PATH = (
     cv2.data.haarcascades
