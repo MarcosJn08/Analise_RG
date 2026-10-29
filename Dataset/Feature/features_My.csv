@@ -1,0 +1,4 @@
+﻿nome_arquivo,categoria,rotacao_corrigida,inclinacao_corrigida,rosto_detectado,qrcode_detectado,quantidade_palavras,Identidade,Carteira de Identidade,Registro Geral,CPF,Nome,Filiação,Data de Nascimento,Naturalidade,Nacionalidade,Sexo,Órgão Expedidor,Data de Expedição,SSP,Polegar Direito,Assinatura do Titular,Válida em todo território nacional,Carteira de Identidade Nacional,Identidade Nacional,QR Code,Validade,República Federativa do Brasil,National Identity Card,Identity Card,Name,Date of Birth,Place of Birth,Nationality,Sex
+cnh.jpeg,Invalidos,0,2.0,1,0,99,1,0,0,1,1,1,0,0,1,1,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1
+rg.jpeg,RG_Antigo,0,2.0,1,0,76,0,0,1,1,1,1,1,0,1,1,1,0,1,0,0,0,0,0,0,0,1,0,0,1,1,0,1,1
+rga.jpeg,RG_novo,0,0.0,1,0,57,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,1

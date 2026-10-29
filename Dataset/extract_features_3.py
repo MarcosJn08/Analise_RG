@@ -9,8 +9,8 @@ from pytesseract import Output
 
 
 PROJETO = Path(__file__).resolve().parent
-PASTA_IMAGENS = PROJETO / "Dataset_Filtrado02"
-CSV_SAIDA = PROJETO / "Feature" / "features_6.csv"
+PASTA_IMAGENS = PROJETO / "MeusDocumentos"
+CSV_SAIDA = PROJETO / "Feature" / "features_My.csv"
 
 CASCADE_PATH = (
     cv2.data.haarcascades
