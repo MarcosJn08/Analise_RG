@@ -9,8 +9,8 @@ from pytesseract import Output
 
 
 PROJETO = Path(__file__).resolve().parent
-PASTA_IMAGENS = PROJETO / "MeusDocumentos"
-CSV_SAIDA = PROJETO / "Feature" / "features_My.csv"
+PASTA_IMAGENS = PROJETO / "Dataset_Filtrado"
+CSV_SAIDA = PROJETO / "Feature" / "features01.csv"
 
 CASCADE_PATH = (
     cv2.data.haarcascades
@@ -47,10 +47,6 @@ def carregar_imagens(pasta_imagens):
 
     return caminhos
 
-
-# ---------------------------------------------------------------------
-# Correção de orientação (0/90/180/270) e inclinação (ângulos pequenos)
-# ---------------------------------------------------------------------
 def _redimensionar(img, largura_max=1000):
     h, w = img.shape[:2]
 
@@ -62,7 +58,6 @@ def _redimensionar(img, largura_max=1000):
 
 
 def _rotacionar_90(img, graus):
-    """Gira a imagem em múltiplos de 90° (sentido horário)."""
     if graus == 90:
         return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
     if graus == 180:
@@ -73,8 +68,6 @@ def _rotacionar_90(img, graus):
 
 
 def _pontuar_ocr(img):
-    """Pontuação = soma da confiança das palavras reconhecidas.
-    Imagem de cabeça pra baixo/de lado gera pouco texto legível."""
     dados = pytesseract.image_to_data(
         img,
         lang="por+eng",
@@ -97,13 +90,6 @@ def _pontuar_ocr(img):
 
 
 def corrigir_orientacao(img):
-    """Corrige rotações de 0/90/180/270 graus.
-
-    1) Tenta o OSD do Tesseract (rápido).
-    2) Se falhar ou tiver baixa confiança, testa as 4 rotações e
-       escolhe a que gera mais texto legível.
-    Retorna (imagem_corrigida, graus_aplicados).
-    """
     pequena = _redimensionar(img)
 
     try:
@@ -118,8 +104,6 @@ def corrigir_orientacao(img):
             return _rotacionar_90(img, graus), graus
 
     except Exception:
-        # OSD costuma falhar em imagens com pouco texto
-        # ou sem o arquivo osd.traineddata instalado.
         pass
 
     melhor_graus = 0
@@ -136,9 +120,6 @@ def corrigir_orientacao(img):
 
 
 def estimar_inclinacao(img, limite=15.0, passo=0.5):
-    """Estima a inclinação (em graus) pelo método do perfil de projeção:
-    o ângulo correto é aquele em que as linhas de texto ficam mais
-    "separadas" (maior variância da soma por linha)."""
     gray = cv2.cvtColor(_redimensionar(img, 600), cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (3, 3), 0)
 
@@ -171,7 +152,6 @@ def estimar_inclinacao(img, limite=15.0, passo=0.5):
 
 
 def corrigir_inclinacao(img, minimo=0.5):
-    """Endireita a imagem se estiver levemente torta."""
     angulo = estimar_inclinacao(img)
 
     if abs(angulo) < minimo:
@@ -195,10 +175,7 @@ def normalizar_imagem(img):
     img, inclinacao = corrigir_inclinacao(img)
     return img, graus, inclinacao
 
-
-# ---------------------------------------------------------------------
 # Features
-# ---------------------------------------------------------------------
 def detectar_rosto(img, face_cascade):
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -218,12 +195,6 @@ def detectar_rosto(img, face_cascade):
         return int(x), int(y), int(w), int(h)
 
     return None, None, None, None
-
-
-def detectar_qrcode(img):
-    detector = cv2.QRCodeDetector()
-    dados, bbox, _ = detector.detectAndDecode(img)
-    return int(bool(dados))
 
 
 def extrair_texto(img):
@@ -252,21 +223,24 @@ def obter_bag_palavras():
         "Órgão Expedidor",
         "Data de Expedição",
         "SSP",
-        "Polegar Direito",
-        "Assinatura do Titular",
+        "Polegar",
+        "Direito",
+        "Plastificar",
+        "Assinatura",
         "Válida em todo território nacional",
         "Carteira de Identidade Nacional",
-        "Identidade Nacional",
-        "QR Code",
         "Validade",
-        "República Federativa do Brasil",
-        "National Identity Card",
-        "Identity Card",
+        "República",
+        "Federativa",
+        "Brasil",
+        "National",
+        "Identity",
+        "Card",
         "Name",
         "Date of Birth",
         "Place of Birth",
-        "Nationality",
-        "Sex"
+        "DOC",
+        "Origem",
     ]
 
 
@@ -294,8 +268,6 @@ def buscar_palavra_aproximada(texto, palavra, erros=2):
 
 
 def calcular_features_bag_palavras(texto, bag_palavras, erros=2):
-    """Gera as colunas do bag of words a partir do texto,
-    sem guardar o texto no resultado."""
     return {
         palavra: int(
             len(buscar_palavra_aproximada(texto, palavra, erros)) > 0
@@ -310,28 +282,15 @@ def processar_imagem(caminho, face_cascade, bag_palavras, erros=2):
     if img is None:
         print(f"[AVISO] Não foi possível abrir: {caminho.name}")
         return None
-
-    # Corrige orientação e inclinação ANTES de qualquer extração
-    img, graus, inclinacao = normalizar_imagem(img)
-
-    if graus or inclinacao:
-        print(
-            f"        rotação: {graus}° | inclinação: {inclinacao:.1f}°"
-        )
+    img, _, _ = normalizar_imagem(img)
 
     x, y, w, h = detectar_rosto(img, face_cascade)
-    qrcode = detectar_qrcode(img)
-
-    # O texto é usado apenas em memória e descartado em seguida
     texto = extrair_texto(img)
 
     resultado = {
         "nome_arquivo": caminho.name,
         "categoria": caminho.parent.name,
-        "rotacao_corrigida": graus,
-        "inclinacao_corrigida": round(inclinacao, 1),
         "rosto_detectado": int(x is not None),
-        "qrcode_detectado": qrcode,
         "quantidade_palavras": contar_palavras(texto)
     }
 
