@@ -202,6 +202,39 @@ def extrair_texto(img):
         img,
         lang="por+eng"
     )
+    
+def extrair_texto_todas_orientacoes(img, rotacoes=(0, 90, 270), conf_minima=50):
+    textos = []
+
+    for graus in rotacoes:
+        rotacionada = _rotacionar_90(img, graus)
+
+        dados = pytesseract.image_to_data(
+            rotacionada,
+            lang="por+eng",
+            output_type=Output.DICT
+        )
+
+        palavras = []
+
+        for texto, conf in zip(dados["text"], dados["conf"]):
+            try:
+                conf = float(conf)
+            except ValueError:
+                continue
+
+            texto = texto.strip()
+
+            if not texto:
+                continue
+
+
+            if graus == 0 or conf >= conf_minima:
+                palavras.append(texto)
+
+        textos.append(" ".join(palavras))
+
+    return "\n".join(textos)
 
 
 def contar_palavras(texto):
@@ -211,7 +244,6 @@ def contar_palavras(texto):
 def obter_bag_palavras():
     return [
         "Identidade",
-        "Carteira de Identidade",
         "Registro Geral",
         "CPF",
         "Nome",
@@ -227,8 +259,6 @@ def obter_bag_palavras():
         "Direito",
         "Plastificar",
         "Assinatura",
-        "Válida em todo território nacional",
-        "Carteira de Identidade Nacional",
         "Validade",
         "República",
         "Federativa",
@@ -285,7 +315,9 @@ def processar_imagem(caminho, face_cascade, bag_palavras, erros=2):
     img, _, _ = normalizar_imagem(img)
 
     x, y, w, h = detectar_rosto(img, face_cascade)
-    texto = extrair_texto(img)
+
+    texto = extrair_texto(img)     
+    texto_completo = extrair_texto_todas_orientacoes(img) 
 
     resultado = {
         "nome_arquivo": caminho.name,
@@ -295,7 +327,7 @@ def processar_imagem(caminho, face_cascade, bag_palavras, erros=2):
     }
 
     resultado.update(
-        calcular_features_bag_palavras(texto, bag_palavras, erros)
+        calcular_features_bag_palavras(texto_completo, bag_palavras, erros)
     )
 
     return resultado
