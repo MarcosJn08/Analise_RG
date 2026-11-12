@@ -6,7 +6,7 @@
 # %%
 # Instala as bibliotecas necessárias (rode só se precisar)
 # ATENÇÃO: faltavam `xgboost` (joblib.load precisa dele) e `regex` (o extrator usa).
-# %pip install joblib numpy pandas pillow requests opencv-python-headless matplotlib scikit-learn xgboost pytesseract regex
+# %pip install joblib numpy pandas pillow requests opencv-python-headless matplotlib scikit-learn xgboost pytesseract regex fastapi uvicorn
 
 # %%
 import base64
@@ -16,7 +16,6 @@ import os
 import re
 import sys
 
-import poplib
 import joblib
 import numpy as np
 import pandas as pd
@@ -25,6 +24,8 @@ import cv2
 import matplotlib.pyplot as plt
 import pytesseract
 from PIL import Image, ImageOps
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 # Windows: descomente e ajuste se o Tesseract não estiver no PATH
 # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
@@ -34,7 +35,7 @@ from PIL import Image, ImageOps
 CAMINHO_MODELO = "models/modelo_xgboost.joblib"
 USAR_DETECTOR_OPENCV = False   # mantenha False: o modelo usa o texto do documento inteiro
 TIPO_DETECTOR = "rosto"
-MAPA_CLASSES = {0: "Invalidos", 1: "RG_Antigo", 2: "RG_novo"}
+MAPA_CLASSES = None            # ex.: {0: "RG", 1: "CNH"} (só se o modelo não tiver encoder)
 MODO_EXTRACAO = "script"
 NOME_MODULO_FEATURES = "extracao_features"
 FORMATO_IMAGEM_EXTRACAO = "numpy_bgr"
@@ -49,7 +50,7 @@ COLUNAS_MODELO = [
     "República Federativa do Brasil", "National Identity Card", "Identity Card",
     "Name", "Date of Birth", "Place of Birth", "Nationality",
 ]
-IMAGEM_VALIDACAO = "Dataset/Teste/00018418_in.jpg"
+IMAGEM_VALIDACAO = "Dataset/Teste/doc_0990.jpg"
 
 # %%
 # Carregar modelo
@@ -385,12 +386,63 @@ def mostrar_resultado(fonte, resultado):
     plt.show()
 
 # %%
-# Uso: a mesma chamada serve para os três formatos
-fonte = IMAGEM_VALIDACAO                       # arquivo
-# fonte = "https://site.com/documento.jpg"     # URL
-# fonte = "data:image/jpeg;base64,/9j/4AAQ..." # base64 (com ou sem o prefixo data:)
+# API
+app = FastAPI(title="Análise de documentos")
 
-imagem = carregar_imagem(fonte)   # decodifica uma vez só (evita baixar a URL 2x)
-resultado = prever(imagem)
-print(resultado)
-mostrar_resultado(imagem, resultado)
+
+class Entrada(BaseModel):
+    # caminho de arquivo (no servidor), URL http(s), base64 ou data URI
+    fonte: str
+
+
+@app.post("/ler-imagem")
+def ler_imagem(entrada: Entrada):
+    try:
+        imagem = carregar_imagem(entrada.fonte)
+    except Exception as erro:
+        # 400 = o erro foi na requisição do cliente
+        raise HTTPException(status_code=400, detail=f"Não consegui ler a imagem: {erro}")
+
+    # carregar_imagem devolve BGR (formato do treino); o PIL espera RGB
+    rgb = cv2.cvtColor(imagem, cv2.COLOR_BGR2RGB)
+
+    # JSON só transporta texto: PNG -> base64
+    buffer = io.BytesIO()
+    Image.fromarray(rgb).save(buffer, format="PNG")
+    imagem_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    return {
+        "shape": list(imagem.shape),  # [altura, largura, canais]
+        "imagem_base64": imagem_base64,
+    }
+
+
+@app.post("/prever")
+def prever_imagem(entrada: Entrada):
+    try:
+        imagem = carregar_imagem(entrada.fonte)
+    except Exception as erro:
+        raise HTTPException(status_code=400, detail=f"Não consegui ler a imagem: {erro}")
+
+    try:
+        return prever(imagem)
+    except Exception as erro:
+        # 500 = o erro foi do servidor (OCR, modelo...), não do cliente
+        raise HTTPException(status_code=500, detail=f"Erro ao classificar a imagem: {erro}")
+
+
+# %%
+def demo_local(fonte=IMAGEM_VALIDACAO):
+    # fonte pode ser arquivo, URL ou base64
+    imagem = carregar_imagem(fonte)
+    resultado = prever(imagem)
+    print(resultado)
+    mostrar_resultado(imagem, resultado)
+
+
+# Só roda com `python main.py`, não quando o uvicorn importa o arquivo
+if __name__ == "__main__":
+    import uvicorn
+
+    # Para testar sem API, troque a linha abaixo por: demo_local()
+    uvicorn.run(app, host="127.0.0.1", port=8000)
