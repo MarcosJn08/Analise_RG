@@ -7,4 +7,4 @@ MeusDocumentos/
 Feature/
 EOF
 gerar_requeriments.py
-.gitignore
+extracao_features.py

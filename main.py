@@ -1,15 +1,3 @@
-"""
-SERVIDOR: recebe uma URL ou uma imagem em base64 de um documento
-e devolve a classe prevista pelo modelo.
-
-Para rodar:
-    pip install -r requirements.txt
-    pip install --no-deps rapidocr-onnxruntime==1.4.4
-    uvicorn main:app --reload
-
-Depois abra http://127.0.0.1:8000/docs no navegador.
-"""
-
 import base64
 import io
 
@@ -23,27 +11,27 @@ from PIL import Image, ImageOps
 from pydantic import BaseModel
 from rapidocr_onnxruntime import RapidOCR
 
-# --- Configurações ---------------------------------------------------
+#Configurações
 CAMINHO_MODELO = "models/modelo_xgboost.joblib"
 MAPA_CLASSES = {0: "Invalidos", 1: "RG_Antigo", 2: "RG_novo"};
 ERROS_FUZZY = 2     
 LADO_MAXIMO = 1600  
 
-# Carrega uma vez, ao iniciar o servidor
+# Modelo
 modelo = joblib.load(CAMINHO_MODELO)
 COLUNAS = list(modelo.feature_names_in_)  # as 26 palavras, na ordem do modelo
 ocr = RapidOCR()
 
-# 1) Cria a aplicacao. Ela e o "servidor" em si.
+#API
 app = FastAPI()
 
 
-# 2) Formato do que o cliente envia: {"fonte": "..."}
+
 class Entrada(BaseModel):
     fonte: str
 
 
-# 3) Le a imagem (URL ou base64)
+# Ler a imagem (URL ou base64)
 def carregar_imagem(fonte):
     fonte = fonte.strip()
 
@@ -63,16 +51,14 @@ def carregar_imagem(fonte):
     return np.array(imagem)
 
 
-# 4) Le o texto da imagem (OCR)
+
 def ler_texto(imagem_rgb):
     bgr = np.ascontiguousarray(imagem_rgb[:, :, ::-1])
-    resultado, _ = ocr(bgr)  # lista de [caixa, texto, confiança] ou None
+    resultado, _ = ocr(bgr)
     if not resultado:
         return ""
     return "\n".join(linha[1] for linha in resultado)
 
-
-# 5) A palavra aparece no texto? (aceita pequenos erros de leitura)
 def tem_palavra(texto, palavra):
     termo = r"\s+".join(regex.escape(parte) for parte in palavra.split())
     padrao = rf"(?e)(?<!\w)(?:{termo}){{e<={ERROS_FUZZY}}}(?!\w)"
@@ -83,7 +69,7 @@ def nome_da_classe(classe):
     return MAPA_CLASSES.get(int(classe), int(classe))
 
 
-# 6) A rota. O cliente envia um POST para /prever
+# Rota da API
 @app.post("/prever")
 def prever(entrada: Entrada):
     try:
@@ -103,15 +89,7 @@ def prever(entrada: Entrada):
 
     melhor = int(np.argmax(probabilidades))
 
-    # 7) O que a API devolve para o cliente
     return {
         "predicao": nome_da_classe(modelo.classes_[melhor]),
         "confianca": round(float(probabilidades[melhor]), 4),
-        "probabilidades": {
-            str(nome_da_classe(classe)): round(float(p), 4)
-            for classe, p in zip(modelo.classes_, probabilidades)
-        },
-        "palavras_encontradas": [p for p, achou in encontradas.items() if achou],
-        "texto_lido": bool(texto.strip()),  # False = o OCR não leu nada
-        "shape": list(imagem.shape),        # [altura, largura, canais]
     }
