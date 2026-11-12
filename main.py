@@ -9,6 +9,7 @@
 # %pip install joblib numpy pandas pillow requests opencv-python-headless matplotlib scikit-learn xgboost pytesseract regex fastapi uvicorn
 
 # %%
+import uvicorn
 import base64
 import importlib
 import io
