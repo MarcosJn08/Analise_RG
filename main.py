@@ -41,9 +41,9 @@ def carregar_imagem(fonte):
         dados = resposta.content
     else:
         if fonte.startswith("data:"):
-            fonte = fonte.split(",", 1)[1]  # remove "data:image/png;base64,"
+            fonte = fonte.split(",", 1)[1] 
         fonte = regex.sub(r"\s+", "", fonte)
-        fonte += "=" * (-len(fonte) % 4)    # corrige padding que às vezes some
+        fonte += "=" * (-len(fonte) % 4)
         dados = base64.b64decode(fonte)
 
     imagem = ImageOps.exif_transpose(Image.open(io.BytesIO(dados))).convert("RGB")
@@ -91,5 +91,5 @@ def prever(entrada: Entrada):
 
     return {
         "predicao": nome_da_classe(modelo.classes_[melhor]),
-        "confianca": round(float(probabilidades[melhor]), 4),
+        "confianca": round(float(probabilidades[melhor]), 4)
     }
