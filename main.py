@@ -13,7 +13,7 @@ from rapidocr_onnxruntime import RapidOCR
 
 #Configurações
 CAMINHO_MODELO = "models/modelo_xgboost.joblib"
-MAPA_CLASSES = {0: "Invalidos", 1: "RG_Antigo", 2: "RG_novo"};
+MAPA_CLASSES = {0: "Invalidos", 1: "RG_Antigo", 2: "RG_novo"}
 ERROS_FUZZY = 2     
 LADO_MAXIMO = 1600  
 
