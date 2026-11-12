@@ -1,95 +1,105 @@
-import base64
-import io
-
+import gc
 import joblib
 import numpy as np
 import pandas as pd
-import regex
-import requests
 from fastapi import FastAPI, HTTPException
-from PIL import Image, ImageOps
 from pydantic import BaseModel
-from rapidocr_onnxruntime import RapidOCR
 
-#Configurações
+from extract_features import ExtratorFeatures, carregar_imagem
+
+# Configurações do Modelo
 CAMINHO_MODELO = "models/modelo_xgboost.joblib"
 MAPA_CLASSES = {0: "Invalidos", 1: "RG_Antigo", 2: "RG_novo"}
-ERROS_FUZZY = 2     
-LADO_MAXIMO = 1600  
 
-# Modelo
+# Inicialização na inicialização da aplicação (para não recarregar a cada request)
 modelo = joblib.load(CAMINHO_MODELO)
-COLUNAS = list(modelo.feature_names_in_)  # as 26 palavras, na ordem do modelo
-ocr = RapidOCR()
+COLUNAS = list(modelo.feature_names_in_)  # 26 palavras-chave esperadas pelo modelo
+extrator = ExtratorFeatures(colunas=COLUNAS)
 
-#API
-app = FastAPI()
-
+# Aplicação FastAPI
+app = FastAPI(
+    title="API de Análise e Classificação de RG",
+    description="Classifica documentos em Inválidos, RG Antigo ou RG Novo. Otimizado para o plano gratuito do Render.",
+    version="2.0.0"
+)
 
 
 class Entrada(BaseModel):
     fonte: str
 
 
-# Ler a imagem (URL ou base64)
-def carregar_imagem(fonte):
-    fonte = fonte.strip()
-
-    if fonte.startswith("http://") or fonte.startswith("https://"):
-        resposta = requests.get(fonte, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-        resposta.raise_for_status()
-        dados = resposta.content
-    else:
-        if fonte.startswith("data:"):
-            fonte = fonte.split(",", 1)[1] 
-        fonte = regex.sub(r"\s+", "", fonte)
-        fonte += "=" * (-len(fonte) % 4)
-        dados = base64.b64decode(fonte)
-
-    imagem = ImageOps.exif_transpose(Image.open(io.BytesIO(dados))).convert("RGB")
-    imagem.thumbnail((LADO_MAXIMO, LADO_MAXIMO))
-    return np.array(imagem)
-
-
-
-def ler_texto(imagem_rgb):
-    bgr = np.ascontiguousarray(imagem_rgb[:, :, ::-1])
-    resultado, _ = ocr(bgr)
-    if not resultado:
-        return ""
-    return "\n".join(linha[1] for linha in resultado)
-
-def tem_palavra(texto, palavra):
-    termo = r"\s+".join(regex.escape(parte) for parte in palavra.split())
-    padrao = rf"(?e)(?<!\w)(?:{termo}){{e<={ERROS_FUZZY}}}(?!\w)"
-    return regex.search(padrao, texto, flags=regex.IGNORECASE) is not None
-
-
 def nome_da_classe(classe):
-    return MAPA_CLASSES.get(int(classe), int(classe))
+    return MAPA_CLASSES.get(int(classe), str(classe))
 
 
-# Rota da API
+@app.get("/")
+@app.get("/health")
+def healthcheck():
+    """
+    Endpoint leve para verificação de status e keep-alive no Render.
+    Pode ser chamado por monitores (ex: UptimeRobot) a cada 10-14 min para evitar suspensão do serviço.
+    """
+    return {
+        "status": "online",
+        "modelo": "XGBoost",
+        "total_features": len(COLUNAS)
+    }
+
+
 @app.post("/prever")
 def prever(entrada: Entrada):
+    # 1. Carregar a imagem (URL ou Base64)
     try:
         imagem = carregar_imagem(entrada.fonte)
     except Exception as erro:
-        # 400 = o erro foi na requisição do cliente
-        raise HTTPException(status_code=400, detail=f"Não consegui ler a imagem: {erro}")
+        # HTTP 400: erro atribuível à requisição do cliente
+        raise HTTPException(status_code=400, detail=f"Não foi possível carregar a imagem: {erro}")
 
+    # 2. Extrair features e classificar
     try:
-        texto = ler_texto(imagem)
-        encontradas = {palavra: int(tem_palavra(texto, palavra)) for palavra in COLUNAS}
-        features = pd.DataFrame([encontradas], columns=COLUNAS)
-        probabilidades = modelo.predict_proba(features)[0]
+        features, texto = extrator.extrair(imagem)
+
+        # Libera o array numpy da imagem para desocupar RAM (crítico para os 512MB do Render)
+        del imagem
+
+        # Early Exit: se o OCR não detectou nenhum texto na imagem, é Inválido diretamente
+        if not texto.strip():
+            return {
+                "predicao": "Invalidos",
+                "confianca": 1.0,
+                "probabilidades": {
+                    "Invalidos": 1.0,
+                    "RG_Antigo": 0.0,
+                    "RG_novo": 0.0
+                },
+                "palavras_encontradas": [],
+                "texto_detectado": False
+            }
+
+        features_df = pd.DataFrame([features], columns=COLUNAS)
+        probabilidades = modelo.predict_proba(features_df)[0]
     except Exception as erro:
-        # 500 = o erro foi do servidor (OCR, modelo...)
+        # HTTP 500: erro no processamento do servidor
         raise HTTPException(status_code=500, detail=f"Erro ao classificar a imagem: {erro}")
+    finally:
+        # Força coleta de lixo pontual para evitar acúmulo de memória
+        gc.collect()
 
     melhor = int(np.argmax(probabilidades))
+    classe_predita = modelo.classes_[melhor]
 
     return {
-        "predicao": nome_da_classe(modelo.classes_[melhor]),
-        "confianca": round(float(probabilidades[melhor]), 4)
+        "predicao": nome_da_classe(classe_predita),
+        "confianca": round(float(probabilidades[melhor]), 4),
+        "probabilidades": {
+            str(nome_da_classe(classe)): round(float(p), 4)
+            for classe, p in zip(modelo.classes_, probabilidades)
+        },
+        "palavras_encontradas": [p for p, v in features.items() if v == 1],
+        "texto_detectado": True
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

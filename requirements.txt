@@ -8,6 +8,7 @@ regex
 joblib
 scikit-learn==1.6.1
 xgboost
+rapidocr-onnxruntime==1.4.4
 onnxruntime
 opencv-python-headless
 pyclipper
